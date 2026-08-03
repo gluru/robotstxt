@@ -1,0 +1,26 @@
+robotstxt_test.go
+  s_b5f340b6020307::t_f2fa9f6b750400 151-156
+  s_b5f340b6020307::t_e54ec724984d7e 341
+  s_b5f340b6020307::t_3145ad2aa51bca 10
+  s_b5f340b6020307::t_a867de3a3cb094 278-340
+robotstxt.go
+  s_b5f340b6020307::t_91c3a206650bc5 27
+  s_b5f340b6020307::t_fecfd2e222f57b 118
+  s_b5f340b6020307::t_5bf30f6981e188 121
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "e4384f99911e0066bb4b70ca6c75f4cf2266d84f",
+  "prompts": {},
+  "sessions": {
+    "s_b5f340b6020307": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "05f84a2a-55f1-4f74-ac22-df06e16cc2ab",
+        "model": "claude-opus-5"
+      },
+      "human_author": null
+    }
+  }
+}
