@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 	"testing/quick"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -147,11 +148,12 @@ func TestParseErrors(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			t.Log("input:", c.input)
-			_, err := FromString(c.input)
-			require.Error(t, err)
-			_, ok := err.(*ParseError)
-			assert.True(t, ok, "Expected ParseError")
-			require.Contains(t, err.Error(), c.expect)
+			r, err := FromString(c.input)
+			// The offending line is skipped and reported, never returned as an
+			// error: the rest of the file still applies.
+			require.NoError(t, err)
+			require.Len(t, r.ParseErrors, 1)
+			require.Contains(t, ParseError{r.ParseErrors}.Error(), c.expect)
 		})
 	}
 }
@@ -272,4 +274,68 @@ func newHttpResponse(code int, body string) *http.Response {
 		Body:          ioutil.NopCloser(strings.NewReader(body)),
 		ContentLength: int64(len(body)),
 	}
+}
+
+// robotsTextOrphanCrawlDelay a real robots.txt opening with a directive above
+// its first User-agent line, which belongs to no group.
+const robotsTextOrphanCrawlDelay = `Crawl-delay: 10
+User-agent: *
+Disallow:
+
+Sitemap: https://example.com/sitemap_index.xml`
+
+func TestKeepsRecordsBelowAnOrphanDirective(t *testing.T) {
+	t.Parallel()
+	r := mustFromString(t, robotsTextOrphanCrawlDelay)
+
+	require.NotNil(t, r)
+	assert.Len(t, r.ParseErrors, 1)
+	assert.True(t, r.FindGroup("SuperBot").Test("/services"))
+	assert.Equal(t, []string{"https://example.com/sitemap_index.xml"}, r.Sitemaps)
+}
+
+func TestKeepsRulesBesideAnUnparseableLine(t *testing.T) {
+	t.Parallel()
+	r := mustFromString(t, "User-agent: *\nDisallow: /private\nCrawl-delay: bad-time-value")
+
+	require.Len(t, r.ParseErrors, 1)
+	// Only the line that failed is skipped, never a rule that parsed.
+	assert.False(t, r.FindGroup("SuperBot").Test("/private"))
+	assert.True(t, r.FindGroup("SuperBot").Test("/public"))
+}
+
+func TestKeepsAValidCrawlDelayBesideABrokenOne(t *testing.T) {
+	t.Parallel()
+	r := mustFromString(t, "User-agent: *\nCrawl-delay: 30\nCrawl-delay: bad-time-value")
+
+	require.Len(t, r.ParseErrors, 1)
+	assert.Equal(t, 30*time.Second, r.FindGroup("SuperBot").CrawlDelay)
+}
+
+func TestUnparseableFileAllowsEverything(t *testing.T) {
+	t.Parallel()
+	r := mustFromString(t, "Disallow: /private")
+
+	require.Len(t, r.ParseErrors, 1)
+	// The rule belongs to no group, so it applies to nobody.
+	assert.True(t, r.FindGroup("SuperBot").Test("/private"))
+}
+
+func TestReportsNoParseErrorForAWellFormedFile(t *testing.T) {
+	t.Parallel()
+	r := mustFromString(t, "User-agent: *\nDisallow: /private\nCrawl-delay: 30")
+
+	assert.Empty(t, r.ParseErrors)
+	assert.False(t, r.FindGroup("SuperBot").Test("/private"))
+	assert.Equal(t, 30*time.Second, r.FindGroup("SuperBot").CrawlDelay)
+}
+
+// mustFromString parse body, failing the test if the parser reports a hard
+// error. Parse errors for individual lines are left on RobotsData.ParseErrors.
+func mustFromString(t *testing.T, body string) *RobotsData {
+	t.Helper()
+	r, err := FromString(body)
+	require.NoError(t, err)
+	require.NotNil(t, r)
+	return r
 }

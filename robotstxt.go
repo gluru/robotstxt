@@ -24,6 +24,7 @@ type RobotsData struct {
 	disallowAll bool
 	Host        string
 	Sitemaps    []string
+	ParseErrors []error
 }
 
 type Group struct {
@@ -40,10 +41,6 @@ type rule struct {
 
 type ParseError struct {
 	Errs []error
-}
-
-func newParseError(errs []error) *ParseError {
-	return &ParseError{errs}
 }
 
 func (e ParseError) Error() string {
@@ -101,8 +98,6 @@ func FromResponse(res *http.Response) (*RobotsData, error) {
 }
 
 func FromBytes(body []byte) (r *RobotsData, err error) {
-	var errs []error
-
 	// special case (probably not worth optimization?)
 	trimmed := bytes.TrimSpace(body)
 	if len(trimmed) == 0 {
@@ -120,11 +115,10 @@ func FromBytes(body []byte) (r *RobotsData, err error) {
 	}
 
 	r = &RobotsData{}
+	var errs []error
 	parser := newParser(tokens)
 	r.groups, r.Host, r.Sitemaps, errs = parser.parseAll()
-	if len(errs) > 0 {
-		return nil, newParseError(errs)
-	}
+	r.ParseErrors = errs
 
 	return r, nil
 }
